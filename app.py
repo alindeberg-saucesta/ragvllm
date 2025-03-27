@@ -120,13 +120,13 @@ def rerank_documents(query: str, documents):
 ##########################################
 # Internet Search Functionality using Bing Web Search API
 ##########################################
-BING_SEARCH_URL = "https://api.bing.microsoft.com/v7.0/search"
-BING_API_KEY = os.environ.get("BING_SEARCH_API_KEY")  # Set this in your environment
+BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
+BRAVE_API_KEY = os.environ.get("BRAVE_SEARCH_API_KEY")  # Set this in your environment
 
 def internet_search(query: str):
-    headers = {"Ocp-Apim-Subscription-Key": BING_API_KEY}
+    headers = {"Ocp-Apim-Subscription-Key": BRAVE_API_KEY}
     params = {"q": query, "textDecorations": True, "textFormat": "HTML"}
-    response = requests.get(BING_SEARCH_URL, headers=headers, params=params)
+    response = requests.get(BRAVE_SEARCH_URL, headers=headers, params=params)
     response.raise_for_status()
     data = response.json()
     results = []
