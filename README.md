@@ -1,6 +1,6 @@
 # ragvllm
 install dependencies
-pip install flask boto3 requests langchain openai langsmith faiss-cpu PyPDF2 langchain-community tiktoken python-multipart
+pip install flask boto3 requests langchain openai langsmith faiss-cpu PyPDF2 langchain-community tiktoken python-multipart uvicorn
 
 List of Dependencies:
 Flask: For the backend web server.
