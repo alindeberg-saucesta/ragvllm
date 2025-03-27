@@ -1,6 +1,7 @@
 import os
 import boto3
 import requests
+import faiss
 from flask import Flask, request, jsonify, render_template
 from werkzeug.utils import secure_filename
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -20,6 +21,31 @@ SYSTEM_PROMPT = (
     "to provide the best possible answer. "
     "Do not guess; if you do not know the answer, simply answer 'I do not know'."
 )
+
+##########################################
+# Helper: Fetch Documents from S3
+##########################################
+def fetch_s3_text_files(bucket_name: str, prefix: str = ""):
+    """
+    Fetch text files from the specified S3 bucket and prefix.
+    Returns:
+        texts: List of file contents (decoded as UTF-8 strings).
+        metadatas: List of metadata dictionaries with the source key.
+    """
+    s3_client = boto3.client("s3", region_name=aws_region)
+    paginator = s3_client.get_paginator("list_objects_v2")
+    
+    texts = []
+    metadatas = []
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key.endswith(".txt"):
+                response = s3_client.get_object(Bucket=bucket_name, Key=key)
+                content = response["Body"].read().decode("utf-8")
+                texts.append(content)
+                metadatas.append({"source": key})
+    return texts, metadatas
 
 ##########################################
 # Initialize Flask App and Configurations
@@ -46,8 +72,20 @@ faiss_index_path = "faiss_index"
 if os.path.exists(faiss_index_path):
     vector_store = FAISS.load_local(faiss_index_path, embedding)
 else:
-    # Create an empty FAISS index with no initial texts.
-    vector_store = FAISS.from_texts([], embedding, metadatas=[])
+    # Try to fetch texts from S3.
+    texts, metadatas = fetch_s3_text_files(s3_bucket_name, s3_prefix)
+    if texts:
+        vector_store = FAISS.from_texts(texts, embedding, metadatas=metadatas)
+    else:
+        # No documents available; create an empty FAISS index manually.
+        # Assuming the embedding dimension is 1536 (default for text-embedding-ada-002)
+        empty_index = faiss.IndexFlatL2(1536)
+        vector_store = FAISS(
+            embedding_function=embedding.embed_query,
+            index=empty_index,
+            docstore={},
+            index_to_docstore_id={}
+        )
 
 ##########################################
 # Custom LLM for VLLM Inference
@@ -85,7 +123,7 @@ conversational_chain = ConversationalRetrievalChain.from_llm(
     llm=vllm_llm,
     retriever=retriever,
     memory=memory,
-    chain_type="stuff",  # You can choose a different chain type if needed.
+    chain_type="stuff",  # Change chain type if needed.
     combine_docs_chain_kwargs={"prompt": custom_prompt}
 )
 
@@ -118,7 +156,7 @@ def rerank_documents(query: str, documents):
     return ranked_docs
 
 ##########################################
-# Internet Search Functionality using Bing Web Search API
+# Internet Search Functionality using Brave Web Search API
 ##########################################
 BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 BRAVE_API_KEY = os.environ.get("BRAVE_SEARCH_API_KEY")  # Set this in your environment
